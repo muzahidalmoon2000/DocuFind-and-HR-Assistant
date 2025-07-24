@@ -350,7 +350,8 @@ def chat():
                 "pauseGPT": True,
                 "files": paginated,
                 "page": page,
-                "total": len(accessible)
+                "total": len(accessible),
+                "allFileIds": [f["id"] for f in accessible]  # ✅ ADD THIS LINE
             })
 
         # ✅ General GPT fallback
