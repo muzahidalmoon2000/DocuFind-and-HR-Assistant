@@ -217,6 +217,16 @@ def upload_hr_doc():
         return jsonify({"message": "✅ File uploaded and indexed."})
     except Exception as e:
         return jsonify({"error": f"❌ Indexing failed: {e}"}), 500
+    
+
+@app.route("/api/skip_selection", methods=["POST"])
+def skip_selection():
+    if not session.get("user_email"):
+        return jsonify({"error": "Unauthorized"}), 401
+    session["stage"] = "awaiting_query"
+    session["found_files"] = []
+    return jsonify({"message": "Skipped selection"})
+
 
 # 🔄 Chat session APIs
 @app.route("/api/session_state")
@@ -345,14 +355,28 @@ def chat():
 
             msg = "Please select file (e.g., 1,3):"
             save_message(user_email, chat_id, ai_response=msg)
+            file_types = list(set([
+                os.path.splitext(f["name"])[1].lower()
+                for f in accessible
+                if "." in f["name"]
+            ]))
+
             return jsonify({
                 "response": msg,
                 "pauseGPT": True,
                 "files": paginated,
                 "page": page,
                 "total": len(accessible),
-                "allFileIds": [f["id"] for f in accessible]  # ✅ ADD THIS LINE
+                "file_types": sorted(file_types),
+                "allFileIds": [f["id"] for f in accessible]
             })
+        
+        # ✅ General questions fallback to ChatGPT-style response
+        if intent == "general_response":
+            gpt_answer = answer_general_query(user_input)
+            save_message(user_email, chat_id, ai_response=gpt_answer)
+            return jsonify(response=gpt_answer, intent="general_response")
+
 
         # ✅ General GPT fallback
         msg = answer_general_query(user_input)
@@ -363,6 +387,7 @@ def chat():
     msg = "⚠️ Something went wrong"
     save_message(user_email, chat_id, ai_response=msg)
     return jsonify(response=msg, intent="error")
+
 
 @app.route("/api/paginate_files")
 def paginate_files():
@@ -377,6 +402,14 @@ def paginate_files():
     filter_type = request.args.get("type", "").lower().strip()
 
     files = session.get("found_files", [])
+
+    # Build the file type list from the full list before filtering
+    file_types = list(set([
+        os.path.splitext(f["name"])[1].lower()
+        for f in files
+        if "." in f["name"]
+    ]))
+
     if filter_type:
         files = [f for f in files if f["name"].lower().endswith(filter_type)]
 
@@ -389,7 +422,8 @@ def paginate_files():
     return jsonify({
         "files": paginated,
         "page": page,
-        "total": total
+        "total": total,
+        "file_types": sorted(file_types)
     })
 
 def handle_file_selection(user_input, token, user_email, chat_id):

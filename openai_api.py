@@ -67,21 +67,56 @@ def detect_intent_and_extract_gpt(user_input):
 
 def answer_general_query(user_input):
     """
-    Use GPT-4o to respond to non-search general questions or small talk.
+    Handles general queries. Attempts basic doc-related answer first.
+    Falls back to broader ChatGPT-style answer if appropriate.
+    """
+    try:
+        # If it's a greeting or small talk, use doc-assistant tone
+        low_context_phrases = ["hi", "hello", "thank you", "who are you", "what can you do"]
+
+        if any(p in user_input.lower() for p in low_context_phrases):
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a polite and helpful assistant inside a document assistant chatbot. "
+                        "Respond to greetings and user messages in a friendly, short way."
+                    )},
+                    {"role": "user", "content": user_input}
+                ],
+                temperature=0.5
+            )
+            return response.choices[0].message.content.strip()
+
+        # ✅ Otherwise, try answering broadly like ChatGPT
+        return answer_with_chatgpt_style(user_input)
+
+    except Exception as e:
+        print("❌ GPT error during general query:", e)
+        return "⚠️ I'm having trouble responding. Please try again shortly."
+
+def answer_with_chatgpt_style(user_input):
+    """
+    Uses GPT-4o with a broad, open-ended ChatGPT-style system prompt.
+    Allows answering general world questions, news-style questions, etc.
     """
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": (
-                    "You are a polite and helpful assistant inside a document search chatbot. "
-                    "You can answer greetings, general queries, or ask clarifying questions if needed."
-                )},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are ChatGPT, an intelligent assistant that can answer general world knowledge, "
+                        "recent events, news-style questions, and everyday queries. "
+                        "Even if some events are recent, do your best to provide an informed response."
+                    )
+                },
                 {"role": "user", "content": user_input}
             ],
-            temperature=0.5
+            temperature=0.7
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ GPT error during general query:", e)
-        return "⚠️ I'm having trouble responding. Please try again shortly."
+        print("❌ Error in ChatGPT-style fallback:", e)
+        return "⚠️ I'm having trouble providing that answer right now."

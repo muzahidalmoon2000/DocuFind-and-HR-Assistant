@@ -95,9 +95,13 @@ def search_all_files(token, query):
         logging.info("No results found via search. Fetching recent files as fallback.")
         all_results = fetch_recent_files(token)
 
-    ranked = rank_files_by_similarity(query, all_results, top_k=None)
+    # ✅ Exclude folders
+    file_only_results = [item for item in all_results if "folder" not in item]
+
+    ranked = rank_files_by_similarity(query, file_only_results, top_k=None)
     logging.info(f"🔍 Ranked {len(ranked)} files matching '{query}'")
     return ranked
+
 
 def fetch_recent_files(token):
     headers = {"Authorization": f"Bearer {token}"}
